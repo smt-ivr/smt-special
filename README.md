@@ -5,6 +5,11 @@
 הועבר מ-Netlify (`smt-special.netlify.app`, פונקציה `api`) ל-Cloudflare Worker, עם אותה לוגיקה ואותן תשובות.
 ההבדל: בדיקת הטוקן וטעינת קובץ הסשן רצות במקביל, והשרת קרוב לישראל במקום בארה"ב.
 
+## כתובת השלוחה
+`https://smti.uk/special`
+
+הפרסום ל-Cloudflare אוטומטי מ-GitHub (Workers Builds) בכל דחיפה ל-`main`.
+
 ## פרמטרים מימות המשיח
 - `token` - טוקן ימות המשיח, או `Login` יחד עם `username` ו-`password`
 - `ApiCallId`, `ApiExtension` - נשלחים אוטומטית מהשלוחה
