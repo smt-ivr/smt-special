@@ -94,6 +94,29 @@ async function validateCode(token, reqId, code) {
   return data && data.responseStatus === "OK" && data.status === true;
 }
 
+// --- מספרים שמורים מקובץ התרגומים (שורות YourID=מספר=שם) ---
+// הסדר בקובץ קובע את מקש הבחירה: הראשון 1, השני 2 וכו'
+async function loadSavedNumbers(token, filePath) {
+  const result = await fetchApiData(`${YEMOT_API_BASE}/GetTextFile`, "get", {
+    token,
+    what: filePath,
+  });
+  if (!result || result.responseStatus !== "OK" || !result.contents) return [];
+
+  const list = [];
+  for (const line of result.contents.split("\n")) {
+    const m = line.match(/^([^=]+)=([^=-]+)[=-](.+)$/);
+    if (!m || m[1].trim() !== "YourID") continue;
+    const num = m[2].trim();
+    // ניקוי תווים ששוברים את מחרוזת ההשמעה
+    const name = m[3].trim().replace(/[.\-=&,"']/g, " ").replace(/\s+/g, " ").trim();
+    if (/^\d{9,10}$/.test(num) && name && !list.some((x) => x.num === num)) {
+      list.push({ num, name });
+    }
+  }
+  return list;
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -132,9 +155,11 @@ export default {
     const fullFilePath = `ivr2:/${ApiExtension}/${ApiCallId}.ini`;
 
     // --- בדיקת הטוקן וטעינת הסשן במקביל (במקור היו אחת אחרי השנייה) ---
-    const [tokenData, loadedSession] = await Promise.all([
+    // names = נתיב קובץ התרגומים (למשל ivr2:Log/shar.ini). בלי הפרמטר - בלי רשימת מספרים שמורים
+    const [tokenData, loadedSession, savedNumbers] = await Promise.all([
       fetchApiData(`${YEMOT_API_BASE}/MFASession`, "get", { token: activeToken, action: "isPass" }),
       loadSessionFile(activeToken, fullFilePath),
+      params.names ? loadSavedNumbers(activeToken, params.names) : Promise.resolve([]),
     ]);
 
     if (!tokenData || !tokenData.isPass) {
@@ -218,23 +243,45 @@ export default {
       return formatYemotResponse(`read=t-הקוד שגוי.t-נא הקישו שוב את הקוד.t-לשליחת קוד חדש הקישו כוכבית וסולמית=${nextVarName},,8,1,1200,Digits,,yes`);
     }
 
-    // === מצב 2: הוקש מספר טלפון ===
+    // תפריט הפתיחה: עם רשימת מספרים שמורים אפשר להקיש מקש קצר או מספר מלא
+    const askForNumber = (prefix = "") => {
+      if (savedNumbers.length === 0) {
+        return formatYemotResponse(`read=${prefix}t-מחובר למערכת.t-נא הקישו את מספר הטלפון לאימות ולסיום הקישו סולמית=phone_number_to_validate,,10,9,,Phone`);
+      }
+      const options = savedNumbers.map((x, i) => `לאימות ${x.name} הקישו ${i + 1}`).join(", ");
+      return formatYemotResponse(`read=${prefix}t-${options}, או הקישו מספר טלפון מלא, ולסיום הקישו סולמית=phone_number_to_validate,,10,1,,Digits`);
+    };
+
+    // === מצב 2: הוקש מספר טלפון או מקש של מספר שמור ===
     if (activeParamName === "phone_number_to_validate") {
-      const newReqId = await getNewReqId(activeToken, activeParamValue);
+      let phoneNumber = activeParamValue;
+      let chosenName = null;
+
+      if (savedNumbers.length > 0 && /^\d{1,3}$/.test(phoneNumber)) {
+        const chosen = savedNumbers[parseInt(phoneNumber, 10) - 1];
+        if (!chosen) return askForNumber("t-הבחירה לא קיימת.");
+        phoneNumber = chosen.num;
+        chosenName = chosen.name;
+      } else if (savedNumbers.length > 0 && !/^\d{9,10}$/.test(phoneNumber)) {
+        return askForNumber("t-המספר שהוקש אינו תקין.");
+      }
+
+      const newReqId = await getNewReqId(activeToken, phoneNumber);
       if (!newReqId) return formatYemotResponse("id_list_message=t-אירעה שגיאה בשליחת הקוד&");
 
       sessionData = {
         reqId: newReqId,
-        phone_number: activeParamValue,
+        phone_number: phoneNumber,
         new_code_counter: 0,
         wrong_code_counter: 0,
       };
       await saveSessionFile(activeToken, fullFilePath, sessionData);
 
-      return formatYemotResponse(`read=t-קוד אימות נשלח אליכם בשיחה.t-נא הקישו את הקוד.t-לשליחת קוד חדש הקישו כוכבית וסולמית=code_attempt_0_1,,8,1,1200,Digits,,yes`);
+      const sentTo = chosenName ? `t-קוד אימות נשלח בשיחה ל${chosenName}` : "t-קוד אימות נשלח אליכם בשיחה";
+      return formatYemotResponse(`read=${sentTo}.t-נא הקישו את הקוד.t-לשליחת קוד חדש הקישו כוכבית וסולמית=code_attempt_0_1,,8,1,1200,Digits,,yes`);
     }
 
     // === מצב 0: כניסה ראשונית ===
-    return formatYemotResponse(`read=t-מחובר למערכת.t-נא הקישו את מספר הטלפון לאימות ולסיום הקישו סולמית=phone_number_to_validate,,10,9,,Phone`);
+    return askForNumber();
   },
 };
