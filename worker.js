@@ -249,16 +249,18 @@ export default {
         return formatYemotResponse(`read=${prefix}t-מחובר למערכת.t-נא הקישו את מספר הטלפון לאימות ולסיום הקישו סולמית=phone_number_to_validate,,10,9,,Phone`);
       }
       const options = savedNumbers.map((x, i) => `לאימות ${x.name} הקישו ${i + 1}`).join(", ");
-      return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ${options}, ולסיום הקישו סולמית, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,Digits`);
+      // מקום 15 = no: בלי בקשת האישור של ימות המשיח (יש לנו אישור משלנו)
+      return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ${options}, ולסיום הקישו סולמית, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,Digits,,,,,,,,,no`);
     };
 
     // === מצב 2: הוקש מספר טלפון או מקש של מספר שמור ===
     if (activeParamName === "phone_number_to_validate") {
-      let phoneNumber = activeParamValue;
+      // הערך האחרון שהוקש בתפריט (פרמטר שחוזר מחובר בפסיקים)
+      let phoneNumber = (params.phone_number_to_validate || "").split(",").pop().trim();
       let chosenName = null;
 
       // כוכבית בתפריט - יציאה
-      if (phoneNumber && phoneNumber.includes("*")) {
+      if (phoneNumber.includes("*")) {
         return formatYemotResponse("&");
       }
 
@@ -269,6 +271,23 @@ export default {
         chosenName = chosen.name;
       } else if (savedNumbers.length > 0 && !/^\d{9,10}$/.test(phoneNumber)) {
         return askForNumber("t-המספר שהוקש אינו תקין.");
+      } else if (savedNumbers.length > 0) {
+        // מספר מלא שנמצא ברשימה - נגיד את השם
+        chosenName = savedNumbers.find((x) => x.num === phoneNumber)?.name || null;
+      }
+
+      // --- אישור לפני שליחת השיחה (רק במצב רשימת מספרים שמורים) ---
+      if (savedNumbers.length > 0) {
+        const confirm = params.confirm_send ? params.confirm_send.split(",").pop().trim() : null;
+
+        if (!confirm) {
+          const target = chosenName
+            ? `t-המערכת תשלח כעת שיחת אימות ל${chosenName}`
+            : `t-המערכת תשלח כעת שיחת אימות למספר.d-${phoneNumber}`;
+          return formatYemotResponse(`read=${target}.t-לאישור הקישו 1, לשינוי הקישו 2, ליציאה הקישו כוכבית=confirm_send,,1,,,NO,,,,12*,,,,,no`);
+        }
+        if (confirm === "2") return formatYemotResponse("go_to_folder=.");
+        if (confirm !== "1") return formatYemotResponse("&");
       }
 
       const newReqId = await getNewReqId(activeToken, phoneNumber);
