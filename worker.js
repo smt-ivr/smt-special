@@ -249,8 +249,8 @@ export default {
         return formatYemotResponse(`read=${prefix}t-מחובר למערכת.t-נא הקישו את מספר הטלפון לאימות ולסיום הקישו סולמית=phone_number_to_validate,,10,9,,Phone`);
       }
       const options = savedNumbers.map((x, i) => `לאימות ${x.name} הקישו ${i + 1}`).join(", ");
-      // מקום 15 = no: בלי בקשת האישור של ימות המשיח (יש לנו אישור משלנו)
-      return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ${options}, ולסיום הקישו סולמית, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,Digits,,,,,,,,,no`);
+      // מקום 6 = NO: בלי הקראת ההקשה. מקום 15 = no: בלי בקשת האישור של ימות המשיח (יש לנו אישור משלנו)
+      return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ${options}, ולסיום הקישו סולמית, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,NO,,,,,,,,,no`);
     };
 
     // === מצב 2: הוקש מספר טלפון או מקש של מספר שמור ===
