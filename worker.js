@@ -126,7 +126,7 @@ async function loadSavedNumbers(token, filePath) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env = {}) {
     const url = new URL(request.url);
 
     // כמו ב-Netlify: פרמטר שמופיע כמה פעמים מחובר בפסיקים
@@ -139,6 +139,11 @@ export default {
     let activeToken = token;
 
     // --- שלב 0: בדיקות מקדימות ---
+    // --- קוד גישה: נשמר כסוד ACCESS_KEY ב-Cloudflare (לא בקוד), נשלח מהשלוחה בפרמטר key ---
+    if (env.ACCESS_KEY && params.key !== env.ACCESS_KEY) {
+      return formatYemotResponse("id_list_message=t-אין הרשאת גישה לשלוחה&");
+    }
+
     if (!token) return formatYemotResponse("id_list_message=t-טוקן חסר&");
     if (!ApiCallId || !ApiExtension) return formatYemotResponse("id_list_message=t-פרמטרים חיוניים חסרים&");
 
@@ -268,7 +273,7 @@ export default {
         prefix = frac ? `t-במערכת יש ${whole}.t-נקודה.t-${frac} יחידות.` : `t-במערכת יש ${whole} יחידות.`;
       }
       // מקום 6 = NO: בלי הקראת ההקשה. מקום 15 = no: בלי בקשת האישור של ימות המשיח (יש לנו אישור משלנו)
-      return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ${options}, ולסיום הקישו סולמית, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,NO,,,,,,,,,no`);
+      return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ולאחר כל בחירה הקישו סולמית, ${options}, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,NO,,,,,,,,,no`);
     };
 
     // === מצב 2: הוקש מספר טלפון או מקש של מספר שמור ===
