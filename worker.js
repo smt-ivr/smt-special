@@ -249,13 +249,18 @@ export default {
         return formatYemotResponse(`read=${prefix}t-מחובר למערכת.t-נא הקישו את מספר הטלפון לאימות ולסיום הקישו סולמית=phone_number_to_validate,,10,9,,Phone`);
       }
       const options = savedNumbers.map((x, i) => `לאימות ${x.name} הקישו ${i + 1}`).join(", ");
-      return formatYemotResponse(`read=${prefix}t-${options}, או הקישו מספר טלפון מלא, ולסיום הקישו סולמית=phone_number_to_validate,,10,1,,Digits`);
+      return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ${options}, ולסיום הקישו סולמית, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,Digits`);
     };
 
     // === מצב 2: הוקש מספר טלפון או מקש של מספר שמור ===
     if (activeParamName === "phone_number_to_validate") {
       let phoneNumber = activeParamValue;
       let chosenName = null;
+
+      // כוכבית בתפריט - יציאה
+      if (phoneNumber && phoneNumber.includes("*")) {
+        return formatYemotResponse("&");
+      }
 
       if (savedNumbers.length > 0 && /^\d{1,3}$/.test(phoneNumber)) {
         const chosen = savedNumbers[parseInt(phoneNumber, 10) - 1];
