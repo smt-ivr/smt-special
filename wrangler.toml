@@ -2,5 +2,10 @@ name = "smt-special"
 main = "worker.js"
 compatibility_date = "2026-07-25"
 
+# ניתוב דומיין - השלוחה בימות המשיח: https://smti.uk/special
+routes = [
+  { pattern = "smti.uk/special*", zone_name = "smti.uk" }
+]
+
 [observability]
 enabled = true
