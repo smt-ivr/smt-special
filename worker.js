@@ -96,6 +96,14 @@ async function validateCode(token, reqId, code) {
 
 // --- מספרים שמורים מקובץ התרגומים (שורות YourID=מספר=שם) ---
 // הסדר בקובץ קובע את מקש הבחירה: הראשון 1, השני 2 וכו'
+// כמות היחידות במערכת (GetCustomerData) - רק להשמעה, לא חוסם כלום
+async function loadUnits(token) {
+  const data = await fetchApiData(`${YEMOT_API_BASE}/GetCustomerData`, "get", { token });
+  if (!data || data.responseStatus !== "OK") return null;
+  const units = Number(data.units);
+  return Number.isFinite(units) ? units : null;
+}
+
 async function loadSavedNumbers(token, filePath) {
   const result = await fetchApiData(`${YEMOT_API_BASE}/GetTextFile`, "get", {
     token,
@@ -156,10 +164,14 @@ export default {
 
     // --- בדיקת הטוקן וטעינת הסשן במקביל (במקור היו אחת אחרי השנייה) ---
     // names = נתיב קובץ התרגומים (למשל ivr2:Log/shar.ini). בלי הפרמטר - בלי רשימת מספרים שמורים
-    const [tokenData, loadedSession, savedNumbers] = await Promise.all([
+    // יחידות נטענות רק בכניסה הראשונה לתפריט הרשימה
+    const isFirstEntry =
+      !params.phone_number_to_validate && !Object.keys(params).some((k) => k.startsWith("code_attempt_"));
+    const [tokenData, loadedSession, savedNumbers, units] = await Promise.all([
       fetchApiData(`${YEMOT_API_BASE}/MFASession`, "get", { token: activeToken, action: "isPass" }),
       loadSessionFile(activeToken, fullFilePath),
       params.names ? loadSavedNumbers(activeToken, params.names) : Promise.resolve([]),
+      params.names && isFirstEntry ? loadUnits(activeToken) : Promise.resolve(null),
     ]);
 
     if (!tokenData || !tokenData.isPass) {
@@ -225,8 +237,9 @@ export default {
 
         await saveSessionFile(activeToken, fullFilePath, sessionData);
 
+        // מקום 6 = NO ומקום 15 = no: בלי הקראת הקוד ובלי אישור, אפשר להקיש שוב מיד
         const nextVarName = `code_attempt_${sessionData.new_code_counter}_1`;
-        return formatYemotResponse(`read=t-קוד אימות נוסף נשלח אליכם.t-נא הקישו את הקוד=${nextVarName},,8,1,1200,Digits,,yes`);
+        return formatYemotResponse(`read=t-קוד אימות נוסף נשלח אליכם.t-נא הקישו את הקוד=${nextVarName},,8,1,1200,NO,,yes,,,,,,,no`);
       }
 
       // --- בדיקת הקוד ---
@@ -240,7 +253,7 @@ export default {
       await saveSessionFile(activeToken, fullFilePath, sessionData);
 
       const nextVarName = `code_attempt_${current_new_counter}_${current_wrong_counter + 1}`;
-      return formatYemotResponse(`read=t-הקוד שגוי.t-נא הקישו שוב את הקוד.t-לשליחת קוד חדש הקישו כוכבית וסולמית=${nextVarName},,8,1,1200,Digits,,yes`);
+      return formatYemotResponse(`read=t-הקוד שגוי.t-נא הקישו שוב את הקוד.t-לשליחת קוד חדש הקישו כוכבית וסולמית=${nextVarName},,8,1,1200,NO,,yes,,,,,,,no`);
     }
 
     // תפריט הפתיחה: עם רשימת מספרים שמורים אפשר להקיש מקש קצר או מספר מלא
@@ -249,6 +262,11 @@ export default {
         return formatYemotResponse(`read=${prefix}t-מחובר למערכת.t-נא הקישו את מספר הטלפון לאימות ולסיום הקישו סולמית=phone_number_to_validate,,10,9,,Phone`);
       }
       const options = savedNumbers.map((x, i) => `לאימות ${x.name} הקישו ${i + 1}`).join(", ");
+      // בכניסה הראשונה: כמה יחידות יש במערכת (עשרוני נאמר עם "נקודה")
+      if (units !== null && !prefix) {
+        const [whole, frac] = String(Number(units.toFixed(2))).split(".");
+        prefix = frac ? `t-במערכת יש ${whole}.t-נקודה.t-${frac} יחידות.` : `t-במערכת יש ${whole} יחידות.`;
+      }
       // מקום 6 = NO: בלי הקראת ההקשה. מקום 15 = no: בלי בקשת האישור של ימות המשיח (יש לנו אישור משלנו)
       return formatYemotResponse(`read=${prefix}t-הקישו טלפון או מקש מקוצר לפי התפריט, ${options}, ולסיום הקישו סולמית, ליציאה הקישו כוכבית=phone_number_to_validate,,10,1,,NO,,,,,,,,,no`);
     };
@@ -302,7 +320,7 @@ export default {
       await saveSessionFile(activeToken, fullFilePath, sessionData);
 
       const sentTo = chosenName ? `t-קוד אימות נשלח בשיחה ל${chosenName}` : "t-קוד אימות נשלח אליכם בשיחה";
-      return formatYemotResponse(`read=${sentTo}.t-נא הקישו את הקוד.t-לשליחת קוד חדש הקישו כוכבית וסולמית=code_attempt_0_1,,8,1,1200,Digits,,yes`);
+      return formatYemotResponse(`read=${sentTo}.t-נא הקישו את הקוד.t-לשליחת קוד חדש הקישו כוכבית וסולמית=code_attempt_0_1,,8,1,1200,NO,,yes,,,,,,,no`);
     }
 
     // === מצב 0: כניסה ראשונית ===
